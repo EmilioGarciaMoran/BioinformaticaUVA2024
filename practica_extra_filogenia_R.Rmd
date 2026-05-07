@@ -1,0 +1,940 @@
+---
+title: "Bioinformática – Sesión extra: Filogenética y conceptos de R"
+author: "Pon aquí tu nombre"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+---
+
+## Introducción
+
+Esta sesión tiene dos objetivos a la vez:
+
+- Seguir practicando con árboles filogenéticos usando datos **reales**.
+- Reforzar conceptos fundamentales de R que aparecieron en la práctica
+  principal pero que merecen más atención: **`str()` y el operador `$`**,
+  **indexación con `[]`**, y las funciones **`class()` / `is()` / `as()`**.
+
+Cada sección empieza con una explicación breve del concepto de R que se trabaja,
+seguida de ejercicios aplicados a objetos filogenéticos reales.
+
+---
+
+## 0. Librerías
+
+```{r librerias}
+library('ape')
+library('phytools')
+library('phangorn')
+library('adegenet')
+```
+
+---
+
+## 1. Datos: primates incluidos en phangorn
+
+Vamos a trabajar con el alineamiento `primates.dna` incluido dentro del
+paquete `phangorn`. Son 14 secuencias mitocondriales: 12 primates más
+ratón y vaca como *outgroups*.
+
+```{r carga}
+fdir <- system.file("extdata/trees", package = "phangorn")
+primatesDNA <- read.dna(file.path(fdir, "primates.dna"), format = "interleaved")
+```
+
+---
+
+## 2. Concepto de R: `class()`, `is()`, `as()`
+
+### Explicación
+
+En R **todo objeto tiene una clase**. La clase determina qué operaciones
+se pueden hacer con ese objeto y cómo se comportan funciones como `plot()`,
+`print()` o `summary()` cuando las aplicamos sobre él.
+
+- `class(x)` — devuelve la clase del objeto `x`.
+- `is(x, "nombre")` — comprueba si `x` pertenece a esa clase (devuelve `TRUE`/`FALSE`).
+- `as(x, "nombre")` o funciones como `as.matrix()`, `as.data.frame()` —
+  intentan **convertir** `x` a otra clase.
+
+Esto es especialmente importante en bioinformática porque los paquetes
+definen sus propias clases (`DNAbin`, `phyDat`, `phylo`...) y muchas
+funciones solo aceptan un tipo concreto.
+
+### Ejercicios
+
+```{r class-ejercicios}
+# 1. ¿De qué clase es primatesDNA?
+#    Ejecutad class() sobre él y anotad el resultado.
+
+
+
+# 2. Comprobad con is() si primatesDNA es de clase "DNAbin".
+#    ¿Y si es de clase "matrix"?
+
+
+
+# 3. Construid la matriz de distancias y guardadla como DprimatesDNA.
+#    ¿De qué clase es el resultado? ¿Es una "matrix"?
+DprimatesDNA <- dist.dna(primatesDNA)
+
+
+
+# 4. Convertid DprimatesDNA a matrix con as.matrix() y guardadla
+#    como DprimatesMatrix. Comprobad ahora con is() que SÍ es "matrix".
+
+
+
+```
+
+**Pregunta:** ¿Por qué creéis que `dist.dna()` devuelve un objeto de clase
+`dist` en lugar de `matrix` directamente? ¿Qué ventaja tiene?
+
+> *Respuesta:*
+
+---
+
+## 3. Concepto de R: indexación con `[]`
+
+### Explicación
+
+El operador `[]` permite **extraer subconjuntos** de vectores, matrices y listas.
+
+Para un **vector**, usáis un índice numérico o lógico:
+```r
+v <- c(10, 20, 30, 40)
+v[2]        # elemento 2 → 20
+v[c(1,3)]   # elementos 1 y 3 → 10 30
+v[v > 15]   # los que cumplen la condición → 20 30 40
+```
+
+Para una **matriz**, usáis dos índices separados por coma: `[fila, columna]`.
+Dejar uno vacío selecciona todo:
+```r
+m[2, ]   # fila 2 completa
+m[ ,3]   # columna 3 completa
+m[1, 4]  # celda fila 1, columna 4
+```
+
+### Ejercicios sobre la matriz de distancias
+
+```{r indexacion-ejercicios}
+# Usad DprimatesMatrix (creada arriba) para los ejercicios siguientes.
+
+# 1. Extraed la segunda fila completa.
+
+
+
+# 2. Extraed la cuarta columna completa.
+
+
+
+# 3. Extraed la celda que contiene la distancia entre
+#    el taxón 1 y el taxón 6.
+
+
+
+# 4. ¿Cuántos pares de taxa tienen una distancia genética
+#    superior a 0.2?
+#    Pista: usad DprimatesMatrix > 0.2 para obtener una matriz lógica,
+#    luego sum() para contar los TRUE.
+#    Atención: la matriz es simétrica y tiene ceros en la diagonal,
+#    pensad cómo afecta eso al conteo.
+
+
+
+# 5. ¿Cuál es la distancia máxima entre cualquier par de taxa?
+#    ¿Y la mínima (sin contar la diagonal, que es 0)?
+#    Pista: max(), min() y podéis usar DprimatesMatrix[DprimatesMatrix > 0]
+#    para excluir la diagonal.
+
+
+
+```
+
+**Pregunta:** La celda `[1,6]` y la celda `[6,1]` de la matriz, ¿tienen el
+mismo valor? ¿Por qué? ¿Cómo se llama esta propiedad de la matriz?
+
+> *Respuesta:*
+
+---
+
+## 4. Construir los árboles
+
+Antes de explorar la estructura interna de los árboles, los construimos.
+
+```{r construir-arboles}
+primatesUPGMA <- upgma(DprimatesDNA)
+primatesNJ    <- nj(DprimatesDNA)
+
+# Plotead los dos árboles para tener una referencia visual
+
+
+
+```
+
+---
+
+## 5. Valoración del ajuste: distancias cofenéticas
+
+### Explicación
+
+Cuando construimos un árbol filogenético a partir de una matriz de distancias D,
+el árbol es una **aproximación** de esas distancias, no una copia exacta.
+Para saber cómo de buena es esa aproximación podemos comparar:
+
+- **x** — las distancias originales de la matriz D (un valor por cada par de taxa).
+- **y** — las **distancias cofenéticas**: las distancias que se pueden leer
+  directamente sobre las ramas del árbol entre cada par de hojas.
+
+Si el árbol fuese perfecto, todos los puntos caerían exactamente sobre la
+diagonal. Cuanto más dispersa sea la nube, peor representa el árbol a los datos.
+
+El código que hace este análisis usa tres funciones encadenadas que vale la pena
+entender por separado:
+
+```r
+# cophenetic(arbol) → matriz de distancias cofenéticas (clase "matrix")
+# as.dist(matriz)   → convierte a clase "dist" (triángulo superior)
+# as.vector(dist)   → aplana a un vector numérico plano
+
+x <- as.vector(DprimatesDNA)                        # distancias originales
+y <- as.vector(as.dist(cophenetic(arbolEnraizado))) # distancias del árbol
+plot(x, y)
+abline(lm(y ~ x), col = 'red')  # línea de regresión: perfecta = diagonal
+```
+
+Hay un detalle importante: `cophenetic()` necesita un árbol **enraizado**.
+El árbol NJ no lo está por defecto — hay que enraizarlo primero con `root()`.
+El árbol UPGMA sí lo está, así que se puede usar directamente.
+
+### Ejercicios
+
+```{r cofenetico-primates}
+# --- ÁRBOL NJ ---
+
+# 1. Enraizad primatesNJ usando el taxón 1 como outgroup.
+#    Guardad el resultado como 'treNJ'.
+#    Pista: root(primatesNJ, out = 1)
+treNJ <-
+
+# 2. Aplicad ladderize() a treNJ para ordenar visualmente las ramas.
+#    Sobreescribid treNJ con el resultado.
+treNJ <-
+
+# 3. Comprobad con class() qué devuelve cophenetic(treNJ).
+#    ¿Es la misma clase que DprimatesMatrix?
+
+
+# 4. Construid el vector x (distancias originales aplanadas)
+#    y el vector y para NJ (distancias cofenéticas aplanadas).
+#    Usad exactamente la cadena: as.vector(as.dist(cophenetic(treNJ)))
+x <-
+y <-
+
+# 5. Comprobad con class() e is() que tanto x como y son vectores numéricos.
+
+
+# 6. Plotead x contra y con:
+#      - xlab = 'Distancia original (D)'
+#      - ylab = 'Distancia cofenética NJ'
+#      - main = 'Ajuste NJ – primates'
+#      - pch = 20, cex = 2
+#    Añadid la línea de regresión con abline(lm(y ~ x), col = 'red').
+
+
+# --- ÁRBOL UPGMA ---
+
+# 7. Repetid el análisis para primatesUPGMA.
+#    UPGMA ya está enraizado, así que no necesitáis root().
+#    Solo aplicad ladderize() y calculad el nuevo vector y.
+y_upgma <-
+
+# 8. Plotead x contra y_upgma con etiquetas equivalentes para UPGMA.
+#    Añadid también la línea de regresión.
+
+
+```
+
+**Pregunta 1:** ¿Qué árbol se ajusta mejor a los datos originales?
+¿Cómo lo sabéis mirando los dos gráficos?
+
+> *Respuesta:*
+
+**Pregunta 2:** ¿Por qué necesitamos `as.dist()` antes de `as.vector()`?
+Pista: ejecutad `class(cophenetic(treNJ))` y luego
+`class(as.dist(cophenetic(treNJ)))` y comparad lo que devuelve `as.vector()`
+en cada caso.
+
+> *Respuesta:*
+
+**Pregunta 3:** ¿Qué representa cada **punto** del scatterplot?
+¿Cuántos puntos esperáis ver con 14 taxa?
+
+> *Respuesta:*
+
+---
+
+## 6. Concepto de R: `str()` y el operador `$`
+
+### Explicación
+
+Cuando una función devuelve un objeto complejo (como un árbol filogenético),
+ese objeto es en realidad una **lista con nombre**: varios componentes
+almacenados juntos bajo el mismo nombre.
+
+- `str(x)` — muestra la **estructura interna** del objeto: qué componentes
+  tiene, de qué tipo es cada uno y cuántos elementos contiene.
+  Es el comando más útil para "abrir" un objeto desconocido.
+
+- El operador `$` permite **acceder a un componente por su nombre**:
+  `objeto$componente`
+
+Ejemplo con una lista sencilla:
+```r
+persona <- list(nombre = "Ana", edad = 25, notas = c(8, 9, 7))
+str(persona)
+# List of 3
+#  $ nombre: chr "Ana"
+#  $ edad  : num 25
+#  $ notas : num [1:3] 8 9 7
+
+persona$nombre   # "Ana"
+persona$notas[2] # 9  ← podéis combinar $ con []
+```
+
+Los objetos `phylo` (árboles) son listas con componentes estándar.
+`str()` os dirá exactamente cómo se llaman.
+
+### Ejercicios
+
+```{r str-ejercicios}
+# 1. Aplicad str() a primatesNJ.
+#    Leed la salida con atención: localizad el componente que es
+#    un vector de texto (chr) con los nombres de los taxa.
+
+
+
+# 2. Acceded a ese componente con $ e imprimidlo.
+#    ¿Cuántos elementos tiene? ¿Coincide con el número de secuencias?
+
+
+
+# 3. Haced lo mismo con primatesUPGMA. ¿Tiene los mismos componentes?
+#    ¿Tiene algún componente adicional que no tenga primatesNJ?
+#    (Pista: UPGMA produce un árbol enraizado, NJ no)
+
+
+
+# 4. Cread un vector con etiquetas nuevas que añadan "_extra" al final
+#    de cada nombre original. Podéis hacerlo manualmente o con paste0().
+#    Ejemplo: "Homo_sapiens" → "Homo_sapiens_extra"
+#    Pista: paste0(primatesNJ$tip.label, "_extra")
+nuevas_etiquetas <- 
+
+
+
+# 5. Asignad ese vector al componente tip.label de primatesNJ
+#    y comprobad que el árbol ahora muestra las etiquetas nuevas.
+primatesNJ$tip.label <- 
+plot(primatesNJ)
+
+
+
+# 6. Restaurad los nombres originales antes de continuar.
+#    (Pista: guardad los originales antes de sobreescribirlos,
+#     o volved a construir el árbol con nj(DprimatesDNA))
+primatesNJ <- nj(DprimatesDNA)
+```
+
+**Pregunta:** En la práctica principal se os pedía localizar `tip.label`
+dentro del árbol para cambiar las etiquetas. ¿Qué comando os habría
+dado directamente esa información sin tener que buscarla en el enunciado?
+
+> *Respuesta:*
+
+---
+
+## 7. Combinando `str()`, `$` e indexación
+
+### Ejercicios
+
+Los árboles `phylo` tienen un componente llamado `edge` que es una matriz
+de dos columnas: cada fila representa una rama, con el nodo origen y el
+nodo destino.
+Tienen también `edge.length` con la longitud de cada rama.
+
+```{r combinado-ejercicios}
+# 1. Usad str() para confirmar que primatesNJ tiene los componentes
+#    edge y edge.length, y anotad de qué tipo es cada uno.
+
+
+
+# 2. ¿Cuántas ramas (filas) tiene la matriz edge de primatesNJ?
+#    Pista: nrow()
+
+
+
+# 3. Acceded a edge.length con $ y calculad:
+#    - La longitud de la rama más larga.
+#    - La longitud media de todas las ramas.
+#    - Cuántas ramas tienen longitud mayor que 0.05.
+
+
+
+# 4. La rama más larga, ¿a qué par de nodos corresponde?
+#    Pista: which.max() os da el índice del máximo en un vector,
+#    y con ese índice podéis acceder a la fila correspondiente de edge.
+indice_max <- which.max(primatesNJ$edge.length)
+
+
+
+# 5. Comparad el número de ramas de primatesNJ con el de primatesUPGMA.
+#    ¿Son iguales? ¿Por qué sí o por qué no?
+
+
+
+```
+
+---
+
+## 8. `class()` e `is()` en la cadena de análisis
+
+En la práctica principal visteis que algunas funciones exigen un tipo
+concreto de objeto. Por ejemplo, `parsimony()` no acepta `DNAbin`
+directamente sino `phyDat`.
+
+### Ejercicios
+
+```{r conversion-ejercicios}
+# 1. Intentad ejecutar parsimony(primatesNJ, primatesDNA).
+#    ¿Qué error obtenéis? Leedlo con atención.
+# (Descomentad la línea, observad el error, volved a comentarla)
+# parsimony(primatesNJ, primatesDNA)
+
+# 2. Convertid primatesDNA a phyDat con as.phyDat() y guardadlo
+#    como primatesPhyDat. Comprobad con class() e is() que ahora
+#    sí es de clase "phyDat".
+
+
+
+# 3. Ahora sí: calculad parsimonia para ambos árboles.
+
+
+
+# 4. Calculad el log-likelihood con pml() para ambos árboles
+#    usando el modelo 'K81'. ¿Qué clase devuelve pml()?
+#    ¿Qué componentes tiene ese objeto? (usad str() o names())
+
+
+
+# 5. Extraed el valor numérico del log-likelihood directamente
+#    del objeto devuelto por pml() usando $ (sin usar logLik()).
+#    Pista: mirad los componentes del objeto con str() o names()
+#    y buscad el que almacena el valor de log-likelihood.
+
+
+
+```
+
+**Pregunta:** ¿Qué árbol da mejor log-likelihood? ¿Coincide con el
+resultado de parsimonia?
+
+> *Respuesta:*
+
+---
+
+## 9. Optimización manual: log-likelihood por iteración
+
+### ¿Guarda `optim.pml()` el historial de logLik?
+
+La respuesta corta es **no**. `optim.pml()` devuelve solo el objeto `pml`
+final — el estado del árbol tras converger. Los valores que aparecen en
+consola durante la ejecución (`-3075 --> -3068 --> ...`) son mensajes
+impresos con `cat()`, no datos guardados en ningún componente del objeto.
+
+Podemos comprobarlo:
+
+```r
+fit_resultado <- optim.pml(fitNJ_k81, rearrangement = 'NNI')
+str(fit_resultado)   # explorad: no hay ningún componente "history" ni "trace"
+```
+
+### La alternativa: construir el bucle nosotros
+
+Lo que **sí podemos hacer** es implementar el proceso a mano: llamar a
+`pml()` en cada iteración, guardar el logLik en un vector y plotearlo.
+Esto es más trabajo, pero tiene tres ventajas:
+
+1. Entendéis exactamente qué hace el optimizador en cada paso.
+2. Practicáis el bucle `for` y la función `c()` para acumular resultados.
+3. Obtenéis una curva de convergencia real para comparar NJ y UPGMA.
+
+La idea es sencilla: en cada iteración optimizamos solo las **longitudes
+de rama** (sin reorganizar la topología), guardamos el logLik resultante,
+y usamos ese árbol mejorado como punto de partida de la siguiente iteración.
+
+```r
+# Esquema del bucle
+historial <- c()                          # vector vacío para acumular
+fit_actual <- fit_inicial                 # punto de partida
+
+for (i in 1:N_iteraciones) {
+  fit_actual <- optim.pml(fit_actual,
+                          optEdge = TRUE,        # optimiza longitudes
+                          rearrangement = "none",# sin cambiar topología
+                          control = pml.control(trace = 0))  # silencioso
+  historial <- c(historial, fit_actual$logLik)  # guardamos el valor
+}
+```
+
+### Ejercicios
+
+```{r optim-manual}
+# Prerrequisitos: necesitáis fitNJ_k81 y fitUPGMA_k81 del apartado 8.
+# Si no los tenéis, volved a ejecutar ese bloque.
+
+# --- ÁRBOL NJ ---
+
+# 1. Inicializad un vector vacío 'histNJ' y una variable 'fit_nj'
+#    con el valor inicial de fitNJ_k81.
+histNJ <- c()
+fit_nj <- fitNJ_k81
+
+# 2. Escribid un bucle for de 15 iteraciones que:
+#    a) Llame a optim.pml() sobre fit_nj con:
+#         optEdge = TRUE
+#         rearrangement = "none"
+#         control = pml.control(trace = 0)   ← silencia la consola
+#    b) Sobreescriba fit_nj con el resultado.
+#    c) Añada fit_nj$logLik al vector histNJ con c().
+
+
+
+# 3. Mostrad histNJ. ¿Los valores aumentan (se vuelven menos negativos)
+#    o disminuyen con cada iteración?
+
+
+
+# --- ÁRBOL UPGMA ---
+
+# 4. Repetid exactamente el mismo proceso para fitUPGMA_k81.
+#    Guardad el historial como 'histUPGMA'.
+histUPGMA <- c()
+fit_upgma <- fitUPGMA_k81
+
+
+
+# --- COMPARAR EN UN GRÁFICO ---
+
+# 5. Plotead ambas curvas en el mismo gráfico.
+#    Pista: usad plot() para la primera y lines() para la segunda.
+#    Sugerencia de parámetros:
+#      - ylim que cubra el rango de ambos vectores: range(c(histNJ, histUPGMA))
+#      - xlab = "Iteración"
+#      - ylab = "log-likelihood"
+#      - main = "Convergencia NJ vs UPGMA"
+#      - col = "steelblue" para NJ, col = "tomato" para UPGMA
+#      - type = "b" (puntos unidos por línea), pch = 19
+
+# Calculad el rango común del eje y
+y_range <- range(c(histNJ, histUPGMA))
+
+# Plot de NJ
+
+
+
+# Añadid UPGMA con lines()
+
+
+
+# Añadid una leyenda con legend()
+
+
+
+```
+
+**Pregunta 1:** ¿Cuál de los dos árboles parte de un logLik más bajo
+(iteración 1)? ¿Cuál converge más rápido visualmente?
+
+> *Respuesta:*
+
+**Pregunta 2:** ¿Por qué hemos usado `rearrangement = "none"` en el bucle
+en lugar de `"NNI"`? ¿Qué pasaría si usásemos NNI en cada iteración?
+
+> *Respuesta:*
+
+**Pregunta 3:** El vector `histNJ` lo hemos construido con
+`histNJ <- c(histNJ, valor)` dentro del bucle. ¿Por qué es necesario
+reasignar a `histNJ` en cada iteración? ¿Qué devuelve `c()` — modifica
+el vector original o devuelve uno nuevo?
+
+> *Respuesta:*
+
+**Pregunta 4:** Si ejecutaseis el mismo bucle con 50 iteraciones en lugar
+de 15, ¿esperaríais que el gráfico cambiase mucho a partir de cierto punto?
+¿Cómo se llama ese comportamiento en el contexto de la optimización?
+
+> *Respuesta:*
+
+---
+
+## 10. Datos de influenza: ponedlo todo junto
+
+Ahora trabajáis con el dataset `usflu` del paquete `adegenet`:
+80 secuencias reales de gripe H3N2 (neuraminidasa, 1993–2008).
+Esta vez **no hay pistas paso a paso**: aplicad todo lo aprendido hoy.
+
+```{r influenza-completo}
+# Cargad los datos
+influenzaDNA <- fasta2DNAbin(
+  file = "http://adegenet.r-forge.r-project.org/files/usflu.fasta"
+)
+
+# A partir de aquí, sin guía:
+# 1. Comprobad la clase del objeto con class() e is().
+# 2. Construid la matriz de distancias y convertidla a matrix.
+# 3. Extraed la fila del taxón 10 y la columna del taxón 25.
+# 4. ¿Cuál es la distancia máxima entre cualquier par?
+# 5. Construid los árboles UPGMA y NJ.
+# 6. Usad str() para localizar tip.label en el árbol NJ
+#    y añadidles el sufijo "_H3N2".
+# 7. Plotead el árbol NJ modificado en formato fan (ajustad cex).
+# 8. Calculad parsimonia y log-likelihood para ambos árboles.
+# 9. Exportad el mejor árbol a fichero .tre con write.tree().
+
+
+
+```
+
+---
+
+## 11. Concepto de R: `data.frame`, `colnames`, `cbind`, `rbind`
+
+### Explicación
+
+Un **`data.frame`** es la estructura de datos más usada en R para almacenar
+tablas: las filas son observaciones y las columnas son variables. A diferencia
+de una matriz, cada columna puede ser de un tipo distinto (números, texto,
+lógicos...).
+
+```r
+# Crear un data.frame directamente
+df <- data.frame(
+  nombre   = c("Ana", "Luis", "Marta"),
+  edad     = c(23, 31, 28),
+  aprobado = c(TRUE, FALSE, TRUE)
+)
+df               # muestra la tabla completa
+nrow(df)         # número de filas
+ncol(df)         # número de columnas
+colnames(df)     # nombres de columnas → "nombre" "edad" "aprobado"
+df$edad          # acceder a una columna con $
+df[2, ]          # fila 2 completa (igual que en matrices)
+df[ , "nombre"]  # columna por nombre en lugar de índice numérico
+```
+
+**`cbind`** ("column bind") une dos objetos **por columnas** — deben tener el
+mismo número de filas. **`rbind`** ("row bind") los une **por filas** — deben
+tener el mismo número de columnas con los mismos nombres.
+
+```r
+a <- data.frame(x = 1:3, y = c("a","b","c"))
+b <- data.frame(z = c(10, 20, 30))
+cbind(a, b)    # añade la columna z a la derecha → 3 filas, 3 columnas
+
+c <- data.frame(x = 4:5, y = c("d","e"))
+rbind(a, c)    # añade dos filas al final → 5 filas, 2 columnas
+```
+
+---
+
+### 9.1 Construir el data.frame de metadatos de influenza
+
+Los nombres de las secuencias de `usflu` tienen la forma
+`CY000001_1993_NY` — es decir, **ID de GenBank**, **año** y **estado**.
+Vamos a extraer esos campos y construir un `data.frame` de metadatos.
+
+```{r metadatos-influenza}
+# Aseguraos de que influenzaDNA está cargado (sección 8).
+# Si no, volved a ejecutar ese bloque primero.
+
+# 1. Extraed los tip.label del árbol NJ de influenza.
+#    Guardadlos como vector 'etiquetas'.
+etiquetas <-
+
+
+
+# 2. Mostrad las primeras 6 etiquetas con head() para ver su formato.
+
+
+
+# 3. Separad cada etiqueta por "_" con strsplit().
+#    El resultado es una lista. Guardadla como 'partes'.
+#    Pista: strsplit(etiquetas, split = "_")
+partes <-
+
+
+
+# 4. Aplicad str() a 'partes' para entender su estructura.
+#    Luego extraed el primer elemento (partes[[1]]) para ver
+#    cómo queda una etiqueta dividida. ¿Qué tipo de objeto es?
+
+
+
+# 5. Construid tres vectores con sapply():
+#      ids:     primer  campo de cada elemento ("CY000001")
+#      anios:   segundo campo ("1993")
+#      estados: tercer  campo ("NY")
+#    Pista: sapply(partes, function(x) x[1]) extrae el primer campo.
+ids     <-
+anios   <-
+estados <-
+
+
+
+# 6. Comprobad con class() que 'anios' es tipo character.
+#    Convertidlo a entero con as.integer().
+#    ¿Para qué puede ser útil que el año sea numérico?
+anios <-
+
+
+
+```
+
+**Pregunta:** `strsplit()` devuelve una lista, no un vector ni una matriz.
+¿Por qué creéis que R usa una lista aquí?
+(Pista: pensad qué pasaría si las etiquetas no tuviesen todas
+el mismo número de campos separados por "_".)
+
+> *Respuesta:*
+
+---
+
+### 9.2 Construir y manipular el data.frame
+
+```{r dataframe-construccion}
+# 1. Construid un data.frame 'meta' con tres columnas: id, anio, estado.
+meta <-
+
+
+
+# 2. Mostrad las primeras filas con head() y las últimas con tail().
+
+
+
+# 3. Comprobad los nombres de columna con colnames().
+#    Renombrad 'anio' a 'year' asignando un vector completo nuevo.
+#    Pista: colnames(meta) <- c(...)
+
+
+
+# 4. Extraed con [] solo las filas cuyo year sea anterior a 2000.
+#    ¿Cuántas secuencias hay anteriores al año 2000?
+#    Pista: meta[meta$year < 2000, ]
+
+
+
+# 5. Extraed solo las columnas 'id' y 'year' usando indexación por nombre.
+#    Pista: meta[ , c("id", "year")]
+
+
+
+```
+
+---
+
+### 9.3 `cbind` y `rbind`
+
+```{r cbind-rbind}
+# 1. Añadid una columna 'region' a 'meta' con cbind().
+#    El valor será "North_America" para todas las filas.
+#    Guardad el resultado como 'meta_ampliado'.
+#    Pista: cbind(meta, region = "North_America")
+meta_ampliado <-
+
+
+
+# 2. Comprobad con colnames() que ahora tiene 4 columnas.
+
+
+
+# 3. Cread un data.frame 'nuevas_filas' con las mismas 4 columnas
+#    y dos filas de datos inventados.
+nuevas_filas <- data.frame(
+  id     = c("CY999991", "CY999992"),
+  year   = c(2010L, 2011L),
+  estado = c("CA", "TX"),
+  region = c("North_America", "North_America")
+)
+
+# 4. Usad rbind() para añadir 'nuevas_filas' a 'meta_ampliado'.
+#    Comprobad con nrow() que el resultado tiene 2 filas más.
+meta_final <-
+
+
+
+# 5. ¿Qué pasa si los nombres de columna no coinciden?
+#    Probad el siguiente rbind, leed el error y volved a comentarlo.
+meta_mal <- data.frame(id = "CY000000", year = 2012L,
+                       estado = "FL", pais = "USA")
+# rbind(meta_ampliado, meta_mal)
+# ¿Qué dice el error? ¿Por qué tiene sentido?
+
+
+
+```
+
+**Pregunta:** ¿Cuál es la diferencia entre añadir una columna con `cbind()`
+y añadirla directamente con `meta$nueva_col <- vector`?
+¿Cuándo usaríais cada opción?
+
+> *Respuesta:*
+
+---
+
+### 9.4 Exportar el fichero de anotación para iTOL
+
+iTOL no acepta un CSV estándar, pero sus ficheros de anotación son texto
+plano con una cabecera especial seguida de datos separados por comas.
+El tipo `DATASET_COLORSTRIP` colorea cada hoja del árbol según una categoría.
+
+Vamos a crear un fichero que coloree las secuencias de influenza por
+**década** (1990s vs 2000s).
+
+```{r itol-export}
+# 1. Añadid una columna 'decada' a meta_ampliado.
+#    Calculadla así: floor(meta_ampliado$year / 10) * 10
+meta_ampliado$decada <-
+
+
+
+# 2. Asignad un color hexadecimal a cada década con un vector nombrado.
+colores <- c("1990" = "#2166ac", "2000" = "#d6604d")
+#    Usad ese vector para crear la columna 'color':
+#    meta_ampliado$color <- colores[as.character(meta_ampliado$decada)]
+meta_ampliado$color <-
+
+
+
+# 3. Construid el data.frame 'itol_data' con solo dos columnas: id y color.
+itol_data <-
+
+
+
+# 4. Escribid el fichero de anotación.
+#    La cabecera fija que necesita iTOL:
+cabecera <- "DATASET_COLORSTRIP
+SEPARATOR COMMA
+DATASET_LABEL,Decada_H3N2
+COLOR,#aaaaaa
+LEGEND_TITLE,Decada
+LEGEND_SHAPES,1,1
+LEGEND_COLORS,#2166ac,#d6604d
+LEGEND_LABELS,1990s,2000s
+DATA
+"
+#    Escribid la cabecera con cat():
+cat(cabecera, file = "influenza_itol_decada.txt")
+
+#    Añadid los datos a continuación (append = TRUE para no sobreescribir):
+write.table(itol_data,
+            file      = "influenza_itol_decada.txt",
+            append    = TRUE,
+            sep       = ",",
+            row.names = FALSE,
+            col.names = FALSE,
+            quote     = FALSE)
+
+# 5. Verificad el resultado leyendo las primeras 20 líneas con readLines().
+readLines("influenza_itol_decada.txt", n = 20)
+```
+
+**Para visualizarlo en iTOL:**
+
+1. Subid el fichero `.tre` del árbol NJ de influenza a [iTOL](https://itol.embl.de/).
+2. Una vez cargado el árbol, arrastrad `influenza_itol_decada.txt`
+   sobre la ventana del árbol.
+3. Las hojas se colorearán en azul (1990s) y naranja-rojo (2000s).
+
+**Pregunta:** ¿Qué patrón temporal observáis en el árbol coloreado?
+¿Las secuencias de la misma década tienden a agruparse juntas?
+¿Qué os dice eso sobre la evolución del virus de la gripe?
+
+> *Respuesta:*
+
+---
+
+## 12. Preguntas de síntesis
+
+Responded en texto (fuera de los bloques de código):
+
+1. ¿Cuál es la diferencia práctica entre `class(x)` y `str(x)`?
+   ¿Cuándo usaríais uno y cuándo el otro?
+
+> *Respuesta:*
+
+2. Si una función os da un error del tipo *"object of class X is not
+   supported"*, ¿qué pasos seguiríais para solucionarlo?
+
+> *Respuesta:*
+
+3. Tenéis un árbol `phylo` llamado `miArbol`. Sin ejecutar nada,
+   ¿cómo accederíais al **tercer** nombre de taxa?
+   Escribid la expresión de R.
+
+> *Respuesta:*
+
+4. En la matriz de distancias, `DprimatesMatrix[3, ]` y
+   `DprimatesMatrix[ ,3]` dan el mismo resultado. ¿Por qué?
+
+> *Respuesta:*
+
+5. Tenéis un `data.frame` con 80 filas. Explicad en una frase qué hace
+   cada una de estas expresiones:
+   - `df[df$year > 2000, ]`
+   - `df[ , c("id", "estado")]`
+   - `nrow(df[df$estado == "NY", ])`
+
+> *Respuesta:*
+
+---
+
+## Reto opcional
+
+El objeto devuelto por `optim.pml()` también es una lista.
+Aplicad `str()` al resultado de optimizar el árbol NJ de primates
+y extraed con `$` e indexación `[]`:
+
+- El valor final de log-likelihood.
+- El vector de longitudes de rama del árbol optimizado.
+- La longitud de la rama más corta del árbol optimizado.
+
+```{r reto-opcional}
+# Optimizad el árbol NJ de primates
+
+
+
+# Explorad la estructura del resultado con str()
+
+
+
+# Extraed los tres elementos pedidos
+
+
+
+```
+
+---
+
+*Fin de la sesión extra. ¡Buen trabajo!*

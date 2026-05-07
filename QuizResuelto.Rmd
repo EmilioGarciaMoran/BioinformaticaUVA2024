@@ -1,0 +1,256 @@
+---
+title: "QUIZ resuelto"
+author: "Emilio García Morán"
+date: "2026-05-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library('rmarkdown')
+```
+
+## R Markdown  y entorno de trabajo
+La entrega consistirá en editar el presente documento, de formato Rmarkdown para escribir código relacionado con árboles filogenéticos. En los bloques de texto se darán instrucciones para realizar el ejericio. Los bloques de código (los enmarcados por triple acento invertido ) se limitará el código, ya que debe ser escrito por los alumnos. Se mantendrán líneas comentario (encabezadas por uno más signos #)
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.  Dejo el enlace a la ayuda básica de Rmarkdown, pero en principio en la práctica solo se pedirá que actuéis dentro de los bloques de código.  
+Para la entrega de la práctica se pedirá que enviéis tanto el fichero .Rmd modificado con vuestro código como un fichero .html que permite visualizar el resultado del código fácilmente. Para obtener el output en formato html deberéis usar el botón de RStudio **Knit**, en la barra de acciones superior. Tiene la etiqueta con su nombre y al lado su símbolo, un ovillo de lana y una aguja de punto.  
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r }
+getwd()
+```
+El anterior bloque de código R muestra el *working directory* para la sesión de R en RStudio. Probablemente será el directorio *home* de cada una de vuestras máquinas virtuales. 
+Deberéis crear en el directorio home una carpeta, *folder* o subdirectorio con en nombre `entregaEvolucion` para que sea vuestro directorio de trabajo y tenerlo todo más organizado.  
+Los ficheros Rmarkdown permiten incrustar código no solo de R, sino de *bash* y de otros lenguajes. A continuación un bloque *bash* vacío, salvo los comentarios , para que inscribáis vuestro código.  
+```{bash, engine.opts= '-l'}
+# hacer mediante una orden bash un directorio subordinado de vuestro
+#directorio home
+#mkdir entregaEvolucion
+
+
+```
+
+Debemos fijar como directorio de trabajo ese directorio recién creado.  
+```{r}
+#Ajustar el directoro de trabajo de RStudio al nuevo directorio 
+#entregaEvolucion dependiente de home y dirige allí el directorio de trabajo ...
+#setwd('~/entregaEvolucion')
+
+
+```
+Combrobamos que todo está como planeamos ejecutando de nuevo `getwd()` para ver que es ahora el nuevo directorio dependiente de home.
+
+```{r}
+getwd()
+
+```
+
+### Librerías  a cargar
+
+Para la realización de la práctica de la entrega no se va a usar ninguna librería adicional a las usadas en las prácticas de clase. Por eso no habrá ningún comando `install.packages()` , y cargaremos directamente los paquetes apropiados, que serán: **ape,phytools, phangorn**. Por favor insertar el código adecuado en el bloque siguiente. 
+```{r}
+#cargad las tres librerías indicadas en el texto con 
+library('ape')
+library('phytools')
+library('phangorn')
+library('ade4')
+library('adegenet')
+
+```
+### Obteniendo secuencias
+Para proseguir la práctica conseguiremos datos de secuencias disponibles on-line. Desde la página personal de Joe Felsestein, actualmente alojada en github, podemos acceder al siguiente fichero de [alineamiento de dna](https://felsenst.github.io/book/hadamard2.dna). Se trata de un alineamiento de 6 elementos, que serán nuestros *taxa*, de los que se proporciona 1000 bp de ADN de cada uno. 
+En el bloque siguiente se pide que carguéis el fichero de la dirección de internet, para crear un objeto en la sesión de R. Existen varias formas correctas de hacer esto. Existe dentro del paquete *ape* una función para leer ADN que admite url. También podéis descargar el fichero desde la línea sde comandos unix, y otros métodos aceptables. 
+
+```{r}
+#ruta a los datos
+#https://felsenst.github.io/book/hadamard2.yr
+#debéis crear un objeto llamado felsesteinSix en la sesión de R
+felsesteinSix<-read.dna('https://felsenst.github.io/book/hadamard2.dna')
+```
+Si se ha ejecutado con éxito el paso anterior, deberíamos tener un objeto llamado `felsesteinSix` en nuestra sesión de R. Por favor, en el siguiente bloque de código se indica cómo explorar de forma elemental el objeto `felsesteinSix`  y se pide que se muestre de qué clase es.   
+```{r}
+#poner el nombre del objeto sin ningún comando y dar Enter
+#es suficiente para que muestre bien el objeto completo en caso
+#de matrices, vectores o data.frame o resumen en los objetos de 
+#clases más complejas
+felsesteinSix
+#añade a continuación el código para que muestre a qué clase 
+#pertenece felsesteinSix
+class(felsesteinSix)
+```
+
+Si se ha ejecutado correctamente el código hasta ahora deberíais tener el objeto del alineamiento de seis taxa  y conocer datos elementales del mismo. Entre esos datos es fácil saber la proporción de nucleótidos del mismo. La proporción CG de una secuencia es un dato biológicamente relevante. En el caso de felsesteinSix tiene un valor de aproximadamente un 50%.  
+
+### Crear la matriz de distancias D
+En las clases y prácticas hemos visto que la forma más sencilla de crear árboles filogenéticos es usando como elemento intermedio de datos una *matriz de distancia*, frecuentemetne referida como *D*. En el siguiente blqueo de código deberás crear el objeto DfelsesteinSix para albergar la matriz de distancia. 
+```{r}
+#DfelsesteinSix<-#crea la matriz de distancia, con el método apropiado del paquete ape
+DfelsesteinSix<-dist.dna(felsesteinSix)
+```
+
+### Hacer árbol con método UPGMA  
+Los dos métodos basados en (matriz de) distancias son: UPGMA y Neighbor Joining (NJ). El paquete **ape** solo tiene uno de estos métodos: `nj`. Vemos que en la práctica de clase el profesor recurre a un método indirecto, haciendo un *cluster jerárquico* para poder hacer el cálculo por el método UPGMA. El paquete **phangorn** tiene ambos métodos. En el bloque siguiente de código deberéis crear, a partir de la matriz de distancias almacenada como `DfelsesteinSix`dos árboles, uno con el método UPGMA y el otro mediante NJ. Los nombres de las variables serán `felsesteinSixUPGMA` y `felsesteinSixNJ`.  
+El [documento de ayuda](https://cran.r-project.org/web/packages/phangorn/vignettes/Trees.html) del paquete **phangorn** puede facilitar elegir los métodos adecuados.  
+
+```{r}
+# El paquete phangorn ofrece los dos métodos. 
+#Recordad guardar los árbles como 
+#felsesteinSixUPGMA
+#felsesteinSixNJ
+#Entre los paquetes ape y phangorn tenéis métodos directos para crear, a partir de la matriz de distancias un arbol con cada metodo
+#felsesteinSixUPGMA<- #el metodo  está en phangorn
+felsesteinSixUPGMA<-upgma(DfelsesteinSix)
+#felsesteinSixNJ<- #el método está en ape
+felsesteinSixNJ<-nj(DfelsesteinSix)
+```
+
+Después del bloque de código anterior ya debemos tener dos objetos clase phylo, susceptibles de ser representados gráficamente (ploteado)
+
+```{r}
+# examina la ayuda de plot.phylo para ver las opciones de parametros adecuadas para plotear los árboles de diversas formas
+help("plot.phylo")
+#plot(felsesteinSixUPGMA), este comando es el que genera el árbol con los parámetros de defecto del programa para el árbol UPGMA.
+plot(felsesteinSixUPGMA)
+#plot(felsesteinSixNJ), igual que para el comando anterior pero en este caso para el NJ.
+plot(felsesteinSixNJ)
+#Para mostrar algunos de los parámetros experimentaremos con el árbol NJ ya que el significado es el mismo.
+#El parámetro type determina el tipo de árbol que se va a dibujar, hay 6 tipos, el de por defecto "phylogram", "cladogram", "fan", "unrooted", "tidy" y "radial". Vistos todos ellos más adelante, en este caso vamos a poner un par para observar las diferencias.
+plot(felsesteinSixNJ, type= "cladogram")
+plot(felsesteinSixNJ, type= "fan")
+#El parámetro use.edge.length, es una lógica que indica si usa longitudes de filogenia para dibujar las ramas (el valor por defecto) o no (FALSE).
+plot(felsesteinSixNJ, use.edge.length=FALSE)
+#El parámetro edge.color permite cambiar el color de los bordes
+plot(felsesteinSixNJ, edge.color="blue")
+#El parámetro edge.width, tiene. como entrada un valor numérico e indica el grosor de los bordes de el árbol
+plot(felsesteinSixNJ, edge.width=0.1)
+plot(felsesteinSixNJ, edge.width=4)
+#El parámetro edge.lty es para indicar que tipos de líneas queremos que tengan los bordes del árbol. 1:plana (por defecto), 2:discontinua, 3:punteada,4: punto-guión 5: guión largo, 6: dos guiones.
+plot(felsesteinSixNJ, edge.lty=3)
+plot(felsesteinSixNJ, edge.lty=2)
+#El parámentro font sirve para cambiar la fuente de las etiquetas; 1 (plain text), 2 (bold), 3 (italic, por defecto), o 4 (bold italic).
+plot(felsesteinSixNJ, font=1)
+plot(felsesteinSixNJ, font=4)
+#El parámetro cex es un valor numérico que otroga un factor de escala de las etiquetas en función y proporcionado al tamaño del arbol.
+plot(felsesteinSixNJ, cex=0.5)
+ plot(felsesteinSixNJ, cex=2)
+#El parámetro adj se usa para modificar la distancia entre el tip del árbol y las etiquetas.
+plot(felsesteinSixNJ, adj=0)
+plot(felsesteinSixNJ, adj=3)
+#Hay más parámetros con los que modificar el árbol pero aún así no son suficientes a la hora de plotear árboles grandes, al final de la práctica se pone en uso una herramienta, externa a R, muy útil en este tipo de casos.
+```
+
+### Examinando y editando objetos R
+A continuación, mediante la orden `ls()` vamos a comprobar que en la sesión de R hasta el momento se han creado 4 objetos: el alineamiento de ADN, la matriz de distancias y dos árboles basados en distancias, uno mediante el algoritmo UPGMA y el otro mediante *Neighbor Joining*.  
+```{r}
+ls()
+```
+En el caso de `DfelsesteinSix` se trata de un objeto en el que el método `class()`nos indica que es de tipo *dist*. No es de tipo *matrix*, por lo que no se puede, de forma directa, explorar meditante la notación de índices y corchetes `[]` que fue explicada en las prácticas.  
+Sin embargo, el objeto puede convertirse a una verdadera matriz con el método `as.matrix()`, en el que se convierte a una matríz simétrica, con valor 0 en la diagonal.  
+En el bloque siguiente de código se hará la conversión y luego deberéis hacer una mínima extracción de datos de la matriz con la notación de índices y corchetes. 
+
+```{r}
+#QUITA EL COMENTARIO DE LA LINEA SIGUIENTE Y SIGUE LAS INSTRUCCIONES A CONTINUACION
+felsesteinSixMatrix <- as.matrix(DfelsesteinSix)
+#Usando el objeto de clase *matrix* creado en la linea anterior, deberéis extraer del mismo:
+# La segunda fila
+felsesteinSixMatrix[2,]
+# la cuarta columna
+felsesteinSixMatrix[,4]
+```
+
+
+Cada uno de esos objetos  tiene una estructura que puede ser examinada mediante el comando `str()`. En el siguiente bloque de código se pedirá que, a la vista de la estructura de cada uno de los objetos, se localice el vector de caracteres (texto) que tiene las etiquetas de los *taxa*. En este caso son letras mayúsculas de la A a la F. Se solicita que ese vector sea editado y asignado de nuevo al árbol, modificando así las etiquetas de los *taxa*.  Se modificarán añadiendo a cada letra un guión bajo y el nombre de usuario de cada uno de los alumnos. Mi nombre de usuario de la máquina virtual es `biopro01`, que usaré para la línea explicativa a continuación. 
+```{r}
+
+viejas_etiquetas<- c('A','B','C','D','E','F')
+nuevas_etiquetas<- c('A_bioalu22','B_bioalu22','C_bioalu22','D_bioalu22','E_bioalu22','F_bioalu22')
+#Debéis, con ayuda del uso del comando str(), localizar cómo se llama el vector de texto(caracteres)
+#que contiene las etiquetas de los árboles disponibles en la sesión. 
+#recordad que los elementos del objeto se acceden con nombreObjeto$nombreComponente
+#nombre objeto-signo dolar-nombre componente. 
+str(felsesteinSixNJ)
+str(felsesteinSixUPGMA)
+#reemplazad el antigio vector por nuevas_etiquetas CON VUESTRO NOMBRE DE USUARIO INDIVIDUAL. 
+felsesteinSixNJ$tip.label<-c(nuevas_etiquetas)
+felsesteinSixUPGMA$tip.label<-c(nuevas_etiquetas)
+
+
+```
+
+## Explorando diversas configuraciones gráficas de los árboles filogenéticos  
+Como se ha explicado en la teoría, los árboles filogenéticos pueden ser representados de varias 
+formas, semejando cajas, círculos. Esas representaciones dan una sensación falsamente diferente entre dos árboles que realmente tienen la misma topografía.  
+En el bloque de código siguiente se pide que, tras examinar la ayuda del método `plot.phylo()` localicéis el parámetro de la función que permite elegir el tipo  (hay 6) de representación gráfica. La que se obtiene por defecto, sin dar valor al tipo de árbol es "phylogram". Debéis ejecutar SOLO PARA EL ARBOL OBTENIDO POR METODO NJ el método `plot()` con las otras cinco posibilidades. Las etiquetas serán las editadas en el bloque anterior de código.   
+```{r}
+?plot.phylo
+#Al ejecutarse la línea previa aparecerá (usualmente abajo a la derecha en RStudio) la ayuda de la función. Debéis localizar el parámetro que modifica el tipo de árbol y cambiarlo a las 5 posibilidades adicionales al valor por defecto
+# SOLO PARA EL OBJETO felsesteinSixNJ
+plot(felsesteinSixNJ, type= "cladogram")
+plot(felsesteinSixNJ, type= "fan")
+plot(felsesteinSixNJ, type= "unrooted")
+plot(felsesteinSixNJ, type= "radial")
+plot(felsesteinSixNJ, type= "tidy")
+```
+
+## Valorando el ajuste de los árboles filogenéticos a los datos de entrada  
+
+Tomando como modelo el código de la línea 301 del fichero de prácticas, vamos a hacer una valoración gráfica del ajuste de un árbol, mediante la comparación en un *scatterplot* de las distancias medidas sobre las ramas del árbol *distancias cofenéticas* comparadas con las distancias de la matriz D.  
+
+```{r}
+# SI HAS REALIZADO CON EXITO LA PRACTICA HASTA AQUI, QUITA LOS COMENTARIOS DE LAS LINEAS SIGUIENTES. 
+#SE MOSTRARAN SCATTER PLOTS PARA VALORAR EL AJUSTE ENTRE LOS ARBOLES UPGMA Y NJ RESPECTO A LA MATRIZ DE DISTANCIAS QUE ES SU INPUT
+tre2 <- root(felsesteinSixNJ, out = 1)
+tre2 <- ladderize(tre2)
+x <- as.vector(DfelsesteinSix)
+y <- as.vector(as.dist(cophenetic(tre2)))
+plot(x, y, xlab='matriz D ', ylab='distancia cofenetica NJ', main='ajuste felsesteinSixNJ', pch=20, col=transp('black',.1), cex=3)
+abline(lm(y~x), col='red')
+
+y <-as.vector(as.dist(cophenetic(ladderize(felsesteinSixUPGMA))))
+
+plot(x, y, xlab='matriz D ', ylab='distancia cofenetica UPGMA', main='ajuste felsesteinSixUPGMA', pch=20, col=transp('black',.1), cex=3)
+abline(lm(y~x), col='red')
+
+```
+
+## Cálculo  del *score* de parsimonia de un árbol filogenético
+
+En las explicaciones de clase, siguiendo el esquema del prof. Kellis, vimos que frente a los métodos para calcular árboles filogenéticos basados en distancias (UPGMA, NJ) existen los que él llama *métodos basados en caracteres*. Todos ellos se basan en puntuar o juzgar el ajuste de un árbol propuesto, modificarlo de una forma limitada y sistemática y ver si esa propuesta mejora el puntaje de la proposición inicial.  
+Este método iterativo, en pasos, es lo que ilustra la [metáfora del robot](https://en.wikipedia.org/wiki/Bayesian_inference_in_phylogeny#/media/File:Robot_metaphor.png).  
+En el bloque siguiente se mostrará el cálculo del score de parsimonia para los dos árboles que tenemos activos en la sesión, el obtenido por el método UPGMA y el obtenido por el método NJ.  
+```{r}
+#Os dejo el código para calcular el score de parsimonia de los árboles UPGMA Y NJ. 
+#Requiere convertir el alineamiento en objeto Phylo.... as.phyDat....
+felsesteinSixNJ$tip.label<-c(viejas_etiquetas)
+felsesteinSixUPGMA$tip.label<-c(viejas_etiquetas)
+parsimony(felsesteinSixNJ,as.phyDat(felsesteinSix))
+parsimony(felsesteinSixUPGMA,as.phyDat(felsesteinSix))
+```
+Se aprecia que el valor para el árbol calculado por NJ es menor que el caculado por UPGMA. El *score* de parsimonia debe entenderse como un coste. Es más desfavorable cuanto más alto sea su valor.  
+
+### Valoración de árboles y optimización mediante MLE (*Maximum Likelihood estimation*)
+Al momento de alcanzar este bloque de la práctica, si revisamos los objetos disponibles mediante `ls()`vemos que tenemos el alineamiento original de 6 taxa, la matriz D de distancia y los dos árboles derivados de distancia. Tenemos además los objetos instrumentales para ver gráficamente el ajuste de cada uno de los dos árboles a los datos.  
+En este bloque haremos uso de la capacidad de R de proporcionar el *Likelihood* de un modelo. La interpretación de este score es que es tanto mejor cuanto mayor sea. Atención, tomando valores negativos será un valor absoluto menor. La [interpretación de Log Likelihood](https://www.statology.org/interpret-log-likelihood/) lo muestra claramente, aplicado a modelos lineales, es decir, como el ejemplo del movimiento lineal a velocidad constate, que relaciona espacio con tiempo mediante la velocidad. Se trata de un modelo lineal, mencionado en clase citando el material del [prof. Anders Gom Pedersen](https://orbit.dtu.dk/en/persons/anders-gorm-pedersen).  
+En el bloque siguiente se va a calcular el valor de *Likelihood* partiendo de los dos árboles que tenemos.  
+```{r}
+# como paso inicial vamos a convertir el alineamiento de secuencias a un objeto 'Phylo' que es el que acepta n estos métodos
+felsesteinSixNJ$tip.label<-c(viejas_etiquetas)
+felsesteinSixUPGMA$tip.label<-c(viejas_etiquetas)
+felsesteinSixPhylo<-as.phyDat(felsesteinSix)
+fitUPGMA_k81<-pml(felsesteinSixUPGMA, felsesteinSixPhylo,model='K81')
+logLik(fitUPGMA_k81)
+fitNJ_k81<-pml(felsesteinSixNJ, felsesteinSixPhylo,model='K81')
+logLik(fitNJ_k81)
+```
+¿Cuál de los dos modelos ha dado un valor **mayor** (cuidado con el signo) de logLikelihood? NJ ha obtenido un mayor score (-7453.263) y por lo tanto tiene un modelo que se ajusta mejor al conjunto de datos de partida que UPGMA que obtuvo un score de -7505.506.
+
+El bloque de cógido anterior equivaldría, en la metáfora del robot en la colina, a una primera posición y lectura de altitud del robot. Al objeto de optimizar el modelo, el robot debe avanzar, haciendo cálculos sucesivos de logLikelihood para intentar optimizarlos.  
+En el paquete **phangorm** hay una serie de métodos que se llamam *optim.X* que toman el modelo como objeto y ajustando parámetros intentan optimizarlo. El método que optimiza modelos basados en máxima *Likelihood* es `optim.pml` . Por defecto intenta optimizar la longitud de las ramas del árbol.  
+```{r}
+optim.pml(fitUPGMA_k81, rearrangement ='NNI')
+optim.pml(fitNJ_k81, rearrangement = 'NNI')
+```
+
+En los resultados vemos que el árbol por el método NJ no modifica apenas los valores. Su topología no cambia , (no NNI moves). En cambio, el UPGMA, que es peor de entrada, sí tiene dos cambios NNI y el valor de LogLikelihood experimenta mayor cambio.  
